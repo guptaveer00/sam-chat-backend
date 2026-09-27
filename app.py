@@ -27,7 +27,7 @@ def create_app(test_config=None):
     app.config.update(
         MAX_CONTENT_LENGTH=20000,
         GEMINI_API_KEY=os.getenv('GEMINI_API_KEY', ''),
-        GEMINI_MODEL=os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-lite'),
+        GEMINI_MODEL=os.getenv('GEMINI_MODEL', 'gemini-3.1-flash-lite').strip(),
         ALLOWED_ORIGINS=os.getenv('ALLOWED_ORIGINS', 'https://guptaveer00.github.io,http://127.0.0.1:8765,http://localhost:8765').split(','),
         HOURLY_REQUEST_LIMIT=int(os.getenv('HOURLY_REQUEST_LIMIT', '100')),
     )
@@ -63,7 +63,36 @@ def create_app(test_config=None):
     @app.get('/')
     @app.get('/health')
     def health():
-        return jsonify(status='ok', service='Sam Altman AI simulation', configured=bool(app.config['GEMINI_API_KEY']))
+        return jsonify(status='ok', service='Sam Altman AI simulation', configured=bool(app.config['GEMINI_API_KEY']), model=app.config['GEMINI_MODEL'], version='model-check-1')
+
+    model_cache = {'expires': 0, 'data': None}
+
+    @app.get('/models')
+    def models():
+        # Only public model identifiers are returned; credentials never leave the server.
+        if not app.config['GEMINI_API_KEY']:
+            return jsonify(error='Server API key is missing.'), 503
+        with lock:
+            if model_cache['expires'] > time.monotonic():
+                return jsonify(model_cache['data'])
+            try:
+                result = http.get(
+                    'https://generativelanguage.googleapis.com/v1beta/models',
+                    headers={'x-goog-api-key': app.config['GEMINI_API_KEY']},
+                    params={'pageSize': 1000}, timeout=(10, 20))
+                if not result.ok:
+                    return jsonify(error='Google rejected the model-list request.', provider_status=result.status_code), 502
+                body = result.json()
+                names = [m['name'].removeprefix('models/') for m in body.get('models', [])
+                         if 'generateContent' in m.get('supportedGenerationMethods', [])]
+                data = {'configured_model': app.config['GEMINI_MODEL'], 'models': names,
+                        'more_available': bool(body.get('nextPageToken'))}
+                model_cache.update(expires=time.monotonic() + 300, data=data)
+                return jsonify(data)
+            except http.RequestException:
+                return jsonify(error='Could not reach Google to list models.'), 504
+            except (ValueError, KeyError, TypeError):
+                return jsonify(error='Unexpected model-list response.'), 502
 
     @app.route('/chat', methods=['POST', 'OPTIONS'])
     def chat():

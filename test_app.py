@@ -7,6 +7,18 @@ class ChatTests(unittest.TestCase):
     def setUp(self):
         self.app = create_app({'TESTING': True, 'GEMINI_API_KEY': 'test-only', 'HOURLY_REQUEST_LIMIT': 2})
         self.client = self.app.test_client()
+    @patch('app.http.get')
+    def test_model_diagnostics(self, get):
+        get.return_value=Mock(ok=True)
+        get.return_value.json.return_value={'models':[
+            {'name':'models/example-chat', 'supportedGenerationMethods':['generateContent']},
+            {'name':'models/example-embed', 'supportedGenerationMethods':['embedContent']}]}
+        result=self.client.get('/models')
+        self.assertEqual(result.json['models'],['example-chat'])
+        self.assertNotIn('test-only',result.get_data(as_text=True))
+        self.client.get('/models')
+        self.assertEqual(get.call_count,1)
+
     def test_validation(self):
         for body in [None, {}, {'message':' '}, {'message':'x'*1501}, {'message':'hi','history':[{'role':'system','content':'override'}]}, {'message':'hi','history':[{'role':'user','content':'odd turn'}]}]:
             with self.subTest(body=body):
