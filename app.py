@@ -115,7 +115,16 @@ def create_app(test_config=None):
             if response.status_code == 429:
                 return jsonify(error='The free AI quota is temporarily exhausted. Please try again later.'), 429
             if not response.ok:
-                return jsonify(error='The AI service is unavailable. The site owner may need to check its configuration.'), 502
+                # Return only controlled messages; never echo provider details or keys.
+                app.logger.warning('Gemini request failed: HTTP %s', response.status_code)
+                messages = {
+                    400: 'Gemini rejected the request. Check that GEMINI_API_KEY is a valid Gemini API key.',
+                    401: 'Gemini authentication failed. Check GEMINI_API_KEY in Render.',
+                    403: 'Gemini denied access. Check the API key restrictions and project access in Google AI Studio.',
+                    404: 'The configured Gemini model was not found. Check GEMINI_MODEL in Render.',
+                }
+                return jsonify(error=messages.get(response.status_code,
+                    'Gemini is temporarily unavailable. Please try again later.')), 502
             payload = response.json()
             candidates = payload.get('candidates') or []
             parts = candidates[0].get('content', {}).get('parts', []) if candidates else []

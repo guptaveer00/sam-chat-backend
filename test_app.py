@@ -42,6 +42,13 @@ class ChatTests(unittest.TestCase):
         post.side_effect=requests.Timeout()
         self.assertEqual(self.client.post('/chat',json={'message':'hello'}).status_code,504)
     @patch('app.http.post')
+    def test_safe_provider_diagnostics(self, post):
+        post.return_value=Mock(ok=False,status_code=404)
+        response=self.client.post('/chat',json={'message':'hello'})
+        self.assertEqual(response.status_code,502)
+        self.assertIn('model was not found',response.json['error'])
+        self.assertNotIn('test-only',response.get_data(as_text=True))
+    @patch('app.http.post')
     def test_empty_reply(self, post):
         post.return_value=Mock(ok=True,status_code=200)
         post.return_value.json.return_value={'candidates':[]}
