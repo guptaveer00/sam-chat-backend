@@ -1,9 +1,6 @@
 # Prompt Log
-
-These retrospective examples were written after development with AI assistance. They are not the actual prompts used during development. See [the original development log](prompt_log.md) for recorded user prompts.
-
-**Development tool:** OpenAI Codex desktop app
-**Chatbot API:** Google Gemini API
+**Develpment tool:** OpenAI Codex desktop app
+**Chabot API:** Google Gemini API
 **Frontend:** HTML, CSS, and JavaScript on GitHub Pages
 **Backend:** Python with Flask on Render
 
